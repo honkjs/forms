@@ -1,6 +1,6 @@
 {
   "name": "@honkjs/forms",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Helper for keeping track of forms model state changes.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
