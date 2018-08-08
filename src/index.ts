@@ -1,7 +1,13 @@
+/**
+ * A form field event.
+ */
 export interface IFieldEvent<T> {
   <K extends keyof T>(field: FormField<T>, child?: FormField<T[K]>): void;
 }
 
+/**
+ * Form field events and accessors
+ */
 export interface IFormFieldAccessors<T> {
   getState: () => T;
   setState: (val: T) => void;
@@ -9,12 +15,15 @@ export interface IFormFieldAccessors<T> {
   onError: IFieldEvent<T>;
 }
 
+/**
+ * Describes a field of a form.
+ */
 export class FormField<T> {
   private errorMessages: string[] = [];
   private children: any = {};
   private hasErrors = false;
   private isModified = false;
-  initialValue: T;
+  private initialValue: T;
 
   constructor(private access: IFormFieldAccessors<T>) {
     this.initialValue = access.getState();
