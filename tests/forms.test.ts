@@ -71,7 +71,7 @@ test('sets field errors', () => {
   const form = createForm(state, onchange, onerror);
   const field = form.getField('data');
 
-  field.errors = ['ERROR'];
+  field.setErrors(['ERROR']);
 
   // field is updated
   expect(field.isErrored).toBe(true);
@@ -172,7 +172,7 @@ test('sets isErrored clears errors', () => {
   const form = createForm(state, onchange, onerror);
   const field = form.getField('data');
 
-  field.errors = ['ERROR'];
+  field.setErrors(['ERROR']);
 
   // field is updated
   expect(field.isErrored).toBe(true);
@@ -210,7 +210,7 @@ test('sets error clears errors', () => {
   const form = createForm(state, onchange, onerror);
   const field = form.getField('data');
 
-  field.errors = ['ERROR'];
+  field.setErrors(['ERROR']);
 
   // field is updated
   expect(field.isErrored).toBe(true);
@@ -218,7 +218,7 @@ test('sets error clears errors', () => {
   // parent is updated
   expect(form.isErrored).toBe(true);
 
-  field.errors = [];
+  field.setErrors([]);
 
   // field is updated
   expect(field.isErrored).toBe(false);
@@ -246,7 +246,7 @@ test('resets field', () => {
   const field = form.getField('data');
 
   field.value = 'different';
-  field.errors = ['ERROR'];
+  field.setErrors(['ERROR']);
 
   expect(state.data).toBe('different');
   expect(field.value).toBe('different');
@@ -282,7 +282,7 @@ test('resets form', () => {
   const field = form.getField('data');
 
   field.value = 'different';
-  field.errors = ['ERROR'];
+  field.setErrors(['ERROR']);
 
   expect(state.data).toBe('different');
   expect(field.value).toBe('different');
@@ -316,14 +316,19 @@ test('gets same field value', () => {
   const field = form.getField('data');
 
   field.value = 'different';
+  field.addError('ERROR');
 
   expect(field.value).toBe('different');
   expect(field.isTouched).toBe(true);
+  expect(field.isErrored).toBe(true);
 
+  // make sure it's pulling from cache
   const fieldAgain = form.getField('data');
-  expect(fieldAgain).toBe(field);
+  expect(fieldAgain).toBe(field); // def the same
   expect(fieldAgain.value).toBe('different');
   expect(fieldAgain.isTouched).toBe(true);
+  expect(fieldAgain.isErrored).toBe(true);
+  expect(fieldAgain.errors).toEqual(['ERROR']);
 });
 
 test('nested fields', () => {
@@ -354,4 +359,42 @@ test('nested fields', () => {
   // top level parent changed
   expect(form.value.sub.data).toBe('different');
   expect(form.isTouched).toBe(true);
+});
+
+test('adds and removes validations', () => {
+  const state = {
+    data: 'test',
+  };
+
+  const form = createForm(state);
+  const field = form.getField('data');
+
+  const error1Validation = (f) => f.addError('ERROR1');
+  const error2Validation = (f) => f.addError('ERROR2');
+  field.addValidation(error1Validation).addValidation(error2Validation);
+
+  // validates on set - TODO is this preferred behavior?
+  field.value = 'different';
+
+  expect(field.value).toBe('different');
+  expect(field.isTouched).toBe(true);
+  expect(field.isErrored).toBe(true);
+  expect(field.errors).toEqual(['ERROR1', 'ERROR2']);
+
+  field.reset();
+  expect(field.value).toBe('test');
+  expect(field.isTouched).toBe(false);
+  expect(field.isErrored).toBe(false);
+  expect(field.errors).toEqual([]);
+
+  field.removeValidation(error2Validation);
+
+  // test validate from parent
+  expect(form.validate()).toBe(false); // errored
+
+  expect(field.isTouched).toBe(false);
+  expect(field.isErrored).toBe(true);
+  expect(field.errors).toEqual(['ERROR1']);
+
+  field.removeValidation(error2Validation);
 });
