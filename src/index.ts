@@ -15,6 +15,8 @@ export interface IFormFieldAccessors<T> {
   onError: IFieldEvent<T>;
 }
 
+export type FormFieldValidation<T> = (field: FormField<T>) => void;
+
 /**
  * Describes a field of a form.
  */
@@ -24,6 +26,7 @@ export class FormField<T> {
   private hasErrors = false;
   private isModified = false;
   private initialValue: T;
+  private validations: FormFieldValidation<T>[] = [];
 
   constructor(private access: IFormFieldAccessors<T>) {
     this.initialValue = access.getState();
@@ -42,17 +45,22 @@ export class FormField<T> {
   set value(value: T) {
     this.isModified = true;
     this.access.setState(value);
+    this.validate();
   }
 
   get value() {
     return this.access.getState();
   }
 
-  get errors() {
+  get errors(): ReadonlyArray<string> {
     return this.errorMessages;
   }
 
-  set errors(errors: string[]) {
+  addError(err: string) {
+    this.setErrors([...this.errors, err]);
+  }
+
+  setErrors(errors: Array<string>) {
     if (errors && errors.length > 0) {
       this.hasErrors = true;
       this.errorMessages = errors;
@@ -85,6 +93,33 @@ export class FormField<T> {
 
   get isTouched() {
     return this.isModified;
+  }
+
+  addValidation(valid: FormFieldValidation<T>) {
+    this.validations.push(valid);
+    return this;
+  }
+
+  removeValidation(valid: FormFieldValidation<T>) {
+    const i = this.validations.indexOf(valid);
+    if (i > -1) {
+      this.validations.splice(i, 1);
+    }
+    return this;
+  }
+
+  validate() {
+    // validate any children first
+    for (let k of Object.keys(this.children)) {
+      this.children[k].validate();
+    }
+
+    // then validate self
+    for (let f of this.validations) {
+      f(this);
+    }
+
+    return !this.isErrored;
   }
 
   getField<K extends keyof T>(key: K): FormField<T[K]> {
