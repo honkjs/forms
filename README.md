@@ -39,8 +39,50 @@ getting and setting errors
 
 getting and setting touch state
 
-nested forms
-
 reset
 
-using with choo/html example
+# nested forms
+
+# lists/arrays
+
+add/remove
+reorder
+
+```ts
+// id selectors are ... problematic?
+const form = createForm({
+  data: 'test',
+  items: [
+    { id: 355, data: 'item355' },
+    { id: 101, data: 'item101' }
+  ]
+});
+
+// does not _require_ an id selector.
+// by default it will use the item data ref.
+const itemFields = form.getFields('items', (i) => i.id);
+
+// adds a new field value
+const f = itemFields.add(data: T);
+
+// gets a collection for mapping, etc.
+itemFields.values.map();
+
+// will use ref/id comparison to update existing fields, add new ones, etc.
+itemFields.values = [];
+
+// select by id, index?
+itemFields.getById(index);
+itemFields.getByIndex(index);
+
+// useful for reordering
+itemFields.indexOf(f);
+
+itemFields.reorder(f, index);
+
+// have to have the field.
+// needs to unhook events
+itemFields.remove(f);
+```
+
+# using with choo/html example

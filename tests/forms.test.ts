@@ -268,6 +268,8 @@ test('resets field', () => {
   field.value = 'different';
   field.setErrors(['ERROR']);
 
+  expect(onchange).toHaveBeenCalledTimes(1);
+
   expect(state.data).toBe('different');
   expect(field.value).toBe('different');
   expect(field.isTouched).toBe(true);
@@ -287,7 +289,7 @@ test('resets field', () => {
   expect(form.isTouched).toBe(true);
   expect(form.isErrored).toBe(true);
 
-  expect(onchange).toHaveBeenCalledTimes(1);
+  expect(onchange).toHaveBeenCalledTimes(2);
 });
 
 test('resets form', () => {
@@ -306,6 +308,8 @@ test('resets form', () => {
 
   field.value = 'different';
   field.setErrors(['ERROR']);
+
+  expect(onchange).toHaveBeenCalledTimes(1);
 
   expect(state.data).toBe('different');
   expect(field.value).toBe('different');
@@ -327,7 +331,7 @@ test('resets form', () => {
   expect(form.isTouched).toBe(false);
   expect(form.isErrored).toBe(false);
 
-  expect(onchange).toHaveBeenCalledTimes(1);
+  expect(onchange).toHaveBeenCalledTimes(2);
 });
 
 test('gets same field value', () => {
@@ -433,4 +437,19 @@ test('adds and removes validations', () => {
   expect(field.isTouched).toBe(false);
   expect(field.isErrored).toBe(true);
   expect(field.errors).toEqual(['ERROR1']);
+});
+
+test('gets field collection', () => {
+  const state = {
+    data: 'test',
+    items: [{ id: 0, data: 'item0' }, { id: 2, data: 'item2' }],
+  };
+
+  const form = createForm(state);
+  const fields = form.getFieldCollection('items');
+
+  expect(fields).not.toBeUndefined();
+  expect(fields.value).toBe(form.value.items);
+
+  const v = fields.value;
 });
