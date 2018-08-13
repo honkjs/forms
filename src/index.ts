@@ -13,6 +13,9 @@ export interface IFormFieldAccessors<T> {
   setState: (val: T) => void;
 }
 
+export type FormFieldCollectionType<T> = T extends (infer U)[] ? FormFieldCollection<U> : undefined;
+export type CollectionType<T> = T extends (infer U)[] ? U : undefined;
+
 /**
  * Describes a field of a form.
  */
@@ -23,11 +26,11 @@ export class FormField<T> {
   private isModified = false;
   private initialValue: T;
 
-  private validateEvent = new Publisher<FieldEvent<T>>();
-  private changeEvent = new Publisher<FieldEvent<T>>();
-  private errorEvent = new Publisher<FieldEvent<T>>();
+  protected validateEvent = new Publisher<FieldEvent<T>>();
+  protected changeEvent = new Publisher<FieldEvent<T>>();
+  protected errorEvent = new Publisher<FieldEvent<T>>();
 
-  constructor(private access: IFormFieldAccessors<T>) {
+  constructor(protected access: IFormFieldAccessors<T>) {
     this.initialValue = access.getState();
   }
 
@@ -118,11 +121,22 @@ export class FormField<T> {
     return !this.isErrored;
   }
 
-  getField<K extends keyof T>(key: K): FormField<T[K]> {
-    if (this.children[key]) {
-      return this.children[key];
-    }
+  getFieldCollection<K extends keyof T>(key: K): FormFieldCollectionType<T[K]>;
 
+  getFieldCollection<K extends keyof T>(key: K) {
+    const child = this.children[key];
+    if (child && child instanceof FormFieldCollection) {
+      return child;
+    }
+    const field = this.createField(key);
+    if (field.value instanceof Array) {
+      const collection = new FormFieldCollection(field as any);
+      this.children[key] = collection;
+      return collection;
+    }
+  }
+
+  private createField<K extends keyof T>(key: K): FormField<T[K]> {
     const access: IFormFieldAccessors<T[K]> = {
       getState: () => this.getFieldValue(key),
       setState: (val) => this.setFieldValue(key, val),
@@ -142,21 +156,114 @@ export class FormField<T> {
     return field;
   }
 
-  reset() {
+  getField<K extends keyof T>(key: K): FormField<T[K]> {
+    if (this.children[key]) {
+      return this.children[key];
+    }
+
+    const field = this.createField(key);
+    this.children[key] = field;
+    return field;
+  }
+
+  reset(suppressOnChange: boolean = false) {
     // reset this field
     // if this is an object, this won't do much.
     this.access.setState(this.initialValue);
 
     // then child fields
     for (let k of Object.keys(this.children)) {
-      this.children[k].reset();
+      this.children[k].reset(true);
     }
 
     this.hasErrors = false;
     this.isModified = false;
     this.errorMessages = [];
 
-    // should reset trigger an onchange?
+    // reset triggers if you ask nicely
+    if (!suppressOnChange) {
+      this.changeEvent.publish(this);
+    }
+  }
+}
+
+export class FormFieldCollection<TItem> {
+  private collection: ReadonlyArray<FormField<TItem>> = [];
+
+  constructor(private field: FormField<TItem[]>) {
+    this.buildCollection(field.value);
+  }
+
+  private buildCollection(items: TItem[]) {
+    this.collection = items.map(() => this.createFormFieldItem());
+  }
+
+  private createFormFieldItem() {
+    // creates a proxy to the matching index of the parent array
+    // wonky: yes, works: maybe
+    const getState = (): TItem => {
+      const index = this.indexOf(field);
+      return this.field.value[index];
+    };
+    const setState = (state: TItem) => {
+      // immutable update
+      const index = this.indexOf(field);
+      this.field.value = this.field.value.map((item, i) => {
+        if (i != index) {
+          return item;
+        } else {
+          return state;
+        }
+      });
+    };
+
+    const field = new FormField({ getState, setState });
+    return field;
+  }
+
+  get fields(): ReadonlyArray<FormField<TItem>> {
+    return this.collection;
+  }
+
+  set fields(fields: ReadonlyArray<FormField<TItem>>) {
+    this.collection = fields;
+    this.field.value = this.value;
+  }
+
+  indexOf(item: FormField<TItem>) {
+    return this.collection.indexOf(item);
+  }
+
+  set value(value: TItem[]) {
+    this.buildCollection(value);
+    this.field.value = value;
+  }
+
+  get value() {
+    return this.field.value;
+  }
+
+  remove(index: number) {
+    this.collection = this.collection.slice().splice(index, 1);
+    this.field.value = this.collection.map((item) => item.value);
+  }
+
+  insert(item: TItem, index?: number) {
+    let items = this.field.value.slice();
+    const fields = this.collection.slice();
+    const field = this.createFormFieldItem();
+
+    if (!index || index < 0) {
+      items.push(item);
+      fields.push(field);
+      this.collection = fields;
+    } else {
+      items = items.splice(index, 0, item);
+      this.collection = fields.splice(index, 0, field);
+    }
+
+    // now set the parent
+    this.field.value = items;
   }
 }
 
