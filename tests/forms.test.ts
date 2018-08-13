@@ -1,5 +1,5 @@
 import 'jest';
-import { createForm, FormField } from '../src';
+import { createForm } from '../src';
 
 test('initializes form', () => {
   const state = {
@@ -446,10 +446,24 @@ test('gets field collection', () => {
   };
 
   const form = createForm(state);
+
+  // this is such a huge funkay hack
+  // problems:
+  //  you can get at the underlying array in a variety of ways and modify it
+  //  generating all these is funkay.
+
+  // so many proxies... there has to be a better version of this out there somewhere...
   const fields = form.getFieldCollection('items');
 
   expect(fields).not.toBeUndefined();
   expect(fields.value).toBe(form.value.items);
+
+  // can update field prop
+  // can completely change field (set)
+  // can remove item
+  // can add item
+  // can set items (clearing fields)
+  // can map set fields
 
   const v = fields.value;
 });

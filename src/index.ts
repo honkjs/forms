@@ -1,4 +1,4 @@
-import { Publisher, IUnsubscribe } from '@honkjs/publisher';
+import { Publisher } from '@honkjs/publisher';
 
 /**
  * A form field event.
@@ -12,9 +12,6 @@ export interface IFormFieldAccessors<T> {
   getState: () => T;
   setState: (val: T) => void;
 }
-
-export type FormFieldCollectionType<T> = T extends (infer U)[] ? FormFieldCollection<U> : undefined;
-export type CollectionType<T> = T extends (infer U)[] ? U : undefined;
 
 /**
  * Describes a field of a form.
@@ -44,9 +41,8 @@ export class FormField<T> {
   }
 
   set value(value: T) {
-    this.isModified = true;
     this.access.setState(value);
-    this.changeEvent.publish(this);
+    this.isTouched = true;
   }
 
   get value() {
@@ -128,9 +124,14 @@ export class FormField<T> {
     if (child && child instanceof FormFieldCollection) {
       return child;
     }
-    const field = this.createField(key);
-    if (field.value instanceof Array) {
-      const collection = new FormFieldCollection(field as any);
+
+    const access: IFormFieldAccessors<T[K]> = {
+      getState: () => this.getFieldValue(key),
+      setState: (val) => this.setFieldValue(key, val),
+    };
+
+    if (access.getState() instanceof Array) {
+      const collection = new FormFieldCollection(access as any);
       this.children[key] = collection;
       return collection;
     }
@@ -187,11 +188,14 @@ export class FormField<T> {
   }
 }
 
-export class FormFieldCollection<TItem> {
+export type FormFieldCollectionType<T> = T extends (infer U)[] ? FormFieldCollection<U> : undefined;
+
+export class FormFieldCollection<TItem> extends FormField<TItem[]> {
   private collection: ReadonlyArray<FormField<TItem>> = [];
 
-  constructor(private field: FormField<TItem[]>) {
-    this.buildCollection(field.value);
+  constructor(access: IFormFieldAccessors<TItem[]>) {
+    super(access);
+    this.buildCollection(access.getState());
   }
 
   private buildCollection(items: TItem[]) {
@@ -203,18 +207,20 @@ export class FormFieldCollection<TItem> {
     // wonky: yes, works: maybe
     const getState = (): TItem => {
       const index = this.indexOf(field);
-      return this.field.value[index];
+      return this.access.getState()[index];
     };
     const setState = (state: TItem) => {
       // immutable update
       const index = this.indexOf(field);
-      this.field.value = this.field.value.map((item, i) => {
+      const values = this.value.map((item, i) => {
         if (i != index) {
           return item;
         } else {
           return state;
         }
       });
+      this.access.setState(values);
+      this.isTouched = true;
     };
 
     const field = new FormField({ getState, setState });
@@ -227,29 +233,33 @@ export class FormFieldCollection<TItem> {
 
   set fields(fields: ReadonlyArray<FormField<TItem>>) {
     this.collection = fields;
-    this.field.value = this.value;
+    this.access.setState(fields.map((f) => f.value));
+    this.isTouched = true;
   }
 
   indexOf(item: FormField<TItem>) {
     return this.collection.indexOf(item);
   }
 
-  set value(value: TItem[]) {
-    this.buildCollection(value);
-    this.field.value = value;
+  get value() {
+    return this.access.getState();
   }
 
-  get value() {
-    return this.field.value;
+  set value(values: TItem[]) {
+    this.buildCollection(values);
+    this.access.setState(values);
+    this.isTouched = true;
   }
 
   remove(index: number) {
     this.collection = this.collection.slice().splice(index, 1);
-    this.field.value = this.collection.map((item) => item.value);
+    const values = this.collection.map((item) => item.value);
+    this.access.setState(values);
+    this.isTouched = true;
   }
 
   insert(item: TItem, index?: number) {
-    let items = this.field.value.slice();
+    let items = this.value.slice();
     const fields = this.collection.slice();
     const field = this.createFormFieldItem();
 
@@ -263,7 +273,8 @@ export class FormFieldCollection<TItem> {
     }
 
     // now set the parent
-    this.field.value = items;
+    this.access.setState(items);
+    this.isTouched = true;
   }
 }
 
@@ -289,3 +300,8 @@ export function createForm<T>(state: T): FormField<T> {
 
   return new FormField(access);
 }
+
+// export { FormField, FormFieldCollection, createForm };
+
+const test = {} as FormFieldCollection<any>;
+test.value = [];
