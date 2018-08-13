@@ -23,7 +23,7 @@
 
 # honkjs/forms
 
-A helper for keeping track of forms model state changes.
+A helper for keeping track of a forms model state changes.
 
 ```
 npm install @honkjs/forms
@@ -38,6 +38,8 @@ getting and setting field values
 getting and setting errors
 
 getting and setting touch state
+
+nested forms
 
 reset
 

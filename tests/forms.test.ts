@@ -38,7 +38,9 @@ test('sets field value', () => {
     expect(field.value).toBe('different');
   });
 
-  const form = createForm(state, onchange);
+  const form = createForm(state);
+  form.onChange(onchange);
+
   const field = form.getField('data');
   field.value = 'different';
 
@@ -68,8 +70,11 @@ test('sets field errors', () => {
     expect(field.errors).toEqual(['ERROR']);
   });
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.setErrors(['ERROR']);
 
@@ -95,8 +100,11 @@ test('gets and sets isTouched', () => {
   });
   const onerror = jest.fn();
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.isTouched = true;
 
@@ -132,8 +140,11 @@ test('gets and sets isErrored', () => {
     expect(field.isErrored).toBe(true);
   });
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.isErrored = true;
 
@@ -169,8 +180,11 @@ test('sets isErrored clears errors', () => {
     expect(field.isErrored).toBe(true);
   });
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.setErrors(['ERROR']);
 
@@ -207,8 +221,11 @@ test('sets error clears errors', () => {
     expect(field.isErrored).toBe(true);
   });
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.setErrors(['ERROR']);
 
@@ -242,8 +259,11 @@ test('resets field', () => {
   const onchange = jest.fn();
   const onerror = jest.fn();
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.value = 'different';
   field.setErrors(['ERROR']);
@@ -267,7 +287,7 @@ test('resets field', () => {
   expect(form.isTouched).toBe(true);
   expect(form.isErrored).toBe(true);
 
-  expect(onchange).toHaveBeenCalledTimes(2);
+  expect(onchange).toHaveBeenCalledTimes(1);
 });
 
 test('resets form', () => {
@@ -278,8 +298,11 @@ test('resets form', () => {
   const onchange = jest.fn();
   const onerror = jest.fn();
 
-  const form = createForm(state, onchange, onerror);
+  const form = createForm(state);
   const field = form.getField('data');
+
+  form.onChange(onchange);
+  form.onError(onerror);
 
   field.value = 'different';
   field.setErrors(['ERROR']);
@@ -304,7 +327,7 @@ test('resets form', () => {
   expect(form.isTouched).toBe(false);
   expect(form.isErrored).toBe(false);
 
-  expect(onchange).toHaveBeenCalledTimes(2);
+  expect(onchange).toHaveBeenCalledTimes(1);
 });
 
 test('gets same field value', () => {
@@ -340,9 +363,11 @@ test('nested fields', () => {
 
   const onchange = jest.fn();
 
-  const form = createForm(state, onchange);
+  const form = createForm(state);
   const sub = form.getField('sub');
   const field = sub.getField('data');
+
+  form.onChange(onchange);
 
   field.value = 'different';
 
@@ -369,17 +394,27 @@ test('adds and removes validations', () => {
   const form = createForm(state);
   const field = form.getField('data');
 
-  const error1Validation = (f) => f.addError('ERROR1');
-  const error2Validation = (f) => f.addError('ERROR2');
-  field.addValidation(error1Validation).addValidation(error2Validation);
+  const error1Validation = jest.fn((f) => f.addError('ERROR1'));
+  const error2Validation = jest.fn((f) => f.addError('ERROR2'));
 
-  // validates on set - TODO is this preferred behavior?
+  const unsub1 = field.onValidate(error1Validation);
+  const unsub2 = field.onValidate(error2Validation);
+
   field.value = 'different';
 
   expect(field.value).toBe('different');
   expect(field.isTouched).toBe(true);
-  expect(field.isErrored).toBe(true);
+  expect(field.isErrored).toBe(false);
+  expect(field.errors).toEqual([]);
+
+  // validations require manual firing
+  expect(field.validate()).toBe(false); // failed validation
+
+  expect(error1Validation).toHaveBeenCalledTimes(1);
+  expect(error2Validation).toHaveBeenCalledTimes(1);
+
   expect(field.errors).toEqual(['ERROR1', 'ERROR2']);
+  expect(field.isErrored).toBe(true);
 
   field.reset();
   expect(field.value).toBe('test');
@@ -387,14 +422,15 @@ test('adds and removes validations', () => {
   expect(field.isErrored).toBe(false);
   expect(field.errors).toEqual([]);
 
-  field.removeValidation(error2Validation);
+  unsub2();
 
   // test validate from parent
-  expect(form.validate()).toBe(false); // errored
+  expect(form.validate()).toBe(false); // failed validation
+
+  expect(error1Validation).toHaveBeenCalledTimes(2);
+  expect(error2Validation).toHaveBeenCalledTimes(1); // unsub'd
 
   expect(field.isTouched).toBe(false);
   expect(field.isErrored).toBe(true);
   expect(field.errors).toEqual(['ERROR1']);
-
-  field.removeValidation(error2Validation);
 });

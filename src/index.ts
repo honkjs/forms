@@ -1,21 +1,17 @@
+import { Publisher, IUnsubscribe } from '@honkjs/publisher';
+
 /**
  * A form field event.
  */
-export interface IFieldEvent<T> {
-  <K extends keyof T>(field: FormField<T>, child?: FormField<T[K]>): void;
-}
+export type FieldEvent<T> = <K extends keyof T>(field: FormField<T>, child?: FormField<T[K]>) => void;
 
 /**
- * Form field events and accessors
+ * Getting and setting the value of a field
  */
 export interface IFormFieldAccessors<T> {
   getState: () => T;
   setState: (val: T) => void;
-  onChange: IFieldEvent<T>;
-  onError: IFieldEvent<T>;
 }
-
-export type FormFieldValidation<T> = (field: FormField<T>) => void;
 
 /**
  * Describes a field of a form.
@@ -26,7 +22,10 @@ export class FormField<T> {
   private hasErrors = false;
   private isModified = false;
   private initialValue: T;
-  private validations: FormFieldValidation<T>[] = [];
+
+  private validateEvent = new Publisher<FieldEvent<T>>();
+  private changeEvent = new Publisher<FieldEvent<T>>();
+  private errorEvent = new Publisher<FieldEvent<T>>();
 
   constructor(private access: IFormFieldAccessors<T>) {
     this.initialValue = access.getState();
@@ -37,7 +36,6 @@ export class FormField<T> {
   }
 
   private setFieldValue<K extends keyof T>(key: K, value: T[K]): void {
-    this.isModified = true;
     const state = this.access.getState();
     state[key] = value;
   }
@@ -45,7 +43,7 @@ export class FormField<T> {
   set value(value: T) {
     this.isModified = true;
     this.access.setState(value);
-    this.validate();
+    this.changeEvent.publish(this);
   }
 
   get value() {
@@ -58,13 +56,14 @@ export class FormField<T> {
 
   addError(err: string) {
     this.setErrors([...this.errors, err]);
+    this.errorEvent.publish(this);
   }
 
   setErrors(errors: Array<string>) {
     if (errors && errors.length > 0) {
       this.hasErrors = true;
       this.errorMessages = errors;
-      this.access.onError(this);
+      this.errorEvent.publish(this);
     } else {
       this.hasErrors = false;
       this.errorMessages = [];
@@ -78,7 +77,7 @@ export class FormField<T> {
   set isErrored(errored: boolean) {
     this.hasErrors = errored;
     if (errored) {
-      this.access.onError(this);
+      this.errorEvent.publish(this);
     } else {
       this.errorMessages = [];
     }
@@ -86,8 +85,8 @@ export class FormField<T> {
 
   set isTouched(touched: boolean) {
     this.isModified = touched;
-    if (touched) {
-      this.access.onChange(this);
+    if (this.isModified) {
+      this.changeEvent.publish(this);
     }
   }
 
@@ -95,17 +94,16 @@ export class FormField<T> {
     return this.isModified;
   }
 
-  addValidation(valid: FormFieldValidation<T>) {
-    this.validations.push(valid);
-    return this;
+  onValidate(handler: (field: FormField<T>) => boolean) {
+    return this.validateEvent.subscribe(handler);
   }
 
-  removeValidation(valid: FormFieldValidation<T>) {
-    const i = this.validations.indexOf(valid);
-    if (i > -1) {
-      this.validations.splice(i, 1);
-    }
-    return this;
+  onError(handler: (field: FormField<T>) => boolean) {
+    return this.errorEvent.subscribe(handler);
+  }
+
+  onChange(handler: (field: FormField<T>) => boolean) {
+    return this.changeEvent.subscribe(handler);
   }
 
   validate() {
@@ -114,10 +112,8 @@ export class FormField<T> {
       this.children[k].validate();
     }
 
-    // then validate self
-    for (let f of this.validations) {
-      f(this);
-    }
+    // then self
+    this.validateEvent.publish(this);
 
     return !this.isErrored;
   }
@@ -129,43 +125,40 @@ export class FormField<T> {
 
     const access: IFormFieldAccessors<T[K]> = {
       getState: () => this.getFieldValue(key),
-      setState: (val) => {
-        this.setFieldValue(key, val);
-        this.access.onChange(this, field);
-      },
-      onError: (field, child) => {
-        this.hasErrors = true;
-        this.access.onError(this, field);
-      },
-      onChange: (field, child) => {
-        this.isModified = true;
-        this.access.onChange(this, field);
-      },
+      setState: (val) => this.setFieldValue(key, val),
     };
 
     const field = new FormField<T[K]>(access);
+    field.errorEvent.subscribe((f) => {
+      this.hasErrors = true;
+      this.errorEvent.publish(this, f);
+    });
+    field.changeEvent.subscribe((f) => {
+      this.isModified = true;
+      this.changeEvent.publish(this, f);
+    });
+
     this.children[key] = field;
     return field;
   }
 
   reset() {
-    // note: if this is an object, won't do much
+    // reset this field
+    // if this is an object, this won't do much.
     this.access.setState(this.initialValue);
 
-    // but these should fix it.
+    // then child fields
     for (let k of Object.keys(this.children)) {
       this.children[k].reset();
     }
 
-    // this will fire onchange a bunch
-    // so still need to clear these after.
     this.hasErrors = false;
     this.isModified = false;
     this.errorMessages = [];
+
+    // should reset trigger an onchange?
   }
 }
-
-function emptyEvent() {}
 
 /**
  * Creates a form from the specified state data.
@@ -173,15 +166,11 @@ function emptyEvent() {}
  * @export
  * @template T The type of state
  * @param {T} state The initial state (will be mutated)
- * @param {IFieldEvent<T>} [onChanged] The data was changed event.
- * @param {IFieldEvent<T>} [onErrored] A field had an error.
+ * @param {FieldEvent<T>} [onChanged] The data was changed event.
+ * @param {FieldEvent<T>} [onErrored] A field had an error.
  * @returns {FormField<T>} The formfield to access this form data.
  */
-export function createForm<T>(
-  state: T,
-  onChange: IFieldEvent<T> = emptyEvent,
-  onError: IFieldEvent<T> = emptyEvent
-): FormField<T> {
+export function createForm<T>(state: T): FormField<T> {
   let value = state;
 
   // forms events are slightly different than their fields
@@ -189,8 +178,6 @@ export function createForm<T>(
   const access: IFormFieldAccessors<T> = {
     getState: () => value,
     setState: (val) => (value = val),
-    onChange,
-    onError,
   };
 
   return new FormField(access);
