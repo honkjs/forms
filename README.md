@@ -25,64 +25,42 @@
 
 A helper for keeping track of a forms model state changes.
 
+An experiment originally designed for [choo](https://github.com/choojs/choo).
+
 ```
 npm install @honkjs/forms
 ```
 
 # Basics
 
-createForm
-
-getting and setting field values
-
-getting and setting errors
-
-getting and setting touch state
-
-reset
-
-# nested forms
-
-# lists/arrays
-
-add/remove
-reorder
-
 ```ts
-// id selectors are ... problematic?
-const form = createForm({
-  data: 'test',
-  items: [
-    { id: 355, data: 'item355' },
-    { id: 101, data: 'item101' }
-  ]
-});
+// the context is where you store meta information about your model like validation errors.
+// we're also going to add a reference to the actual model so it's available later.
+const context = { errors: [], model: myModel };
 
-// does not _require_ an id selector.
-// by default it will use the item data ref.
-const itemFields = form.getFields('items', (i) => i.id);
+function onFormChange(ctx) {
+  // do things when the form changes
+  // note: only the context is available
+}
 
-// adds a new field value
-const f = itemFields.add(data: T);
+// the form helper takes a model, context, and an onchange event handler
+const form = createForm(myModel, context, onFormChange);
 
-// gets a collection for mapping, etc.
-itemFields.values.map();
+form.set((m) => (m.Name = 'fargles'));
+const fname = form.helper.input('Name', validations))
 
-// will use ref/id comparison to update existing fields, add new ones, etc.
-itemFields.values = [];
+// and here's an example of a form being used to bind to a model
+export function editorForm(form) {
+  return html`
+    <form>
+      <input
+        type="text"
+        value=${form.model.Name || ''}
+        onchange=${form.input('Name')}
+        placeholder="Name" required=true />
+    </form>`;
+}
 
-// select by id, index?
-itemFields.getById(index);
-itemFields.getByIndex(index);
-
-// useful for reordering
-itemFields.indexOf(f);
-
-itemFields.reorder(f, index);
-
-// have to have the field.
-// needs to unhook events
-itemFields.remove(f);
+// create a form with the same context and change event as the parent form
+const itemForm = form.branch(myModel.items[0]);
 ```
-
-# using with choo/html example
