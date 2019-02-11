@@ -23,6 +23,8 @@
 
 # honkjs/forms
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/honkjs/forms.svg)](https://greenkeeper.io/)
+
 A helper for keeping track of a forms model state changes.
 
 An experiment originally designed for use with [choo](https://github.com/choojs/choo).
